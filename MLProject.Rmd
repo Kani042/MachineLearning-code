@@ -1,0 +1,345 @@
+---
+title: "Machine learning Project-Kanimozhi Subramanian"
+output: html_document
+date: "2023-04-11"
+---
+
+
+***Distribution of Age***
+
+
+```{r}
+library(ggplot2)
+lungcancer <- read.csv("C:/Users/RENJITH/Downloads/lung_cancer.csv")
+ggplot(data = lungcancer, aes(x = AGE)) +
+  geom_histogram(fill = "lightblue", bins = 20) +
+  labs(title = "Distribution of Age", x = "Age", y = "Count")
+```
+
+
+***Gender Distribution plot by Lung Cancer status***
+
+
+```{r}
+library(ggplot2)
+Lungcancerdata<-read.csv("C:/Users/RENJITH/Downloads/lung_cancer.csv")
+ggplot(data = Lungcancerdata, aes(x = GENDER, fill = LUNG_CANCER)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Gender Distribution by Lung Cancer Status", x = "Gender", y = "Count") +
+  scale_fill_manual(values = c("#E69F18", "#56B4E9"), name = "Lung Cancer Status",
+                    labels = c("No", "Yes"))
+```
+
+
+
+***Correlation plot***
+
+
+```{r}
+# Load required package
+library(ggplot2)
+library(psych)
+library(corrplot)
+
+# Load data
+df <- read.csv("C:/Users/RENJITH/Downloads/lung_cancer.csv")
+
+# Create correlation matrix
+corr_matrix <- cor(df[,2:15])
+corrplot(cor(df[ ,2:15]), method = "circle", order = "hclust")
+```
+
+
+
+***Full Logistic Regression***
+
+
+```{r}
+library(pROC)
+library(magrittr)
+library(caret)
+library(tinytex)
+
+#Load the dataset
+Lungcancerdata<-read.csv("C:/Users/RENJITH/Downloads/lung_cancer.csv")
+
+#Check for missing values
+Lungcancerdata <- na.omit(Lungcancerdata)
+
+# Splitting the dataset into train and test data
+set.seed(123)
+training.samples <- Lungcancerdata$LUNG_CANCER %>% createDataPartition(p = 0.75, list = FALSE)
+train.data <- Lungcancerdata[training.samples, ]
+test.data <- Lungcancerdata[-training.samples, ]
+
+#Splitting the Input predictors and output for train data
+x <- model.matrix(LUNG_CANCER~., train.data)[,-1]
+y <- ifelse(train.data$LUNG_CANCER == "YES", 1, 0)
+train.data$LUNG_CANCER<- ifelse(train.data$LUNG_CANCER == "YES", 1, 0)
+
+# Build full logistic model
+full.model <- glm(LUNG_CANCER ~., data = train.data, family = binomial)
+summary(full.model)
+
+# Make predictions
+probabilities <- full.model %>% predict(test.data, type = "response")
+
+# Model accuracy
+predicted.classes <- ifelse(probabilities > 0.5, "YES", "NO")
+
+# Change the predicted classes and observed classes into levels of 0 and 1.
+observed.classes <- test.data$LUNG_CANCER
+observed.classes<-ifelse(observed.classes == "YES", 1, 0)
+predicted.classes<-ifelse(predicted.classes == "YES", 1, 0)
+
+
+observed.classes<-factor(observed.classes,levels = c(0,1))
+predicted.classes<-factor(predicted.classes,levels=c(0,1))
+
+# Model Accuracy
+cm<-confusionMatrix(predicted.classes,observed.classes)
+
+# create the confusion matrix plot
+library(ggplot2)
+cm_plot <- ggplot(data = as.data.frame(cm$table), 
+                  aes(x = Prediction, y = Reference, fill = as.numeric(Freq))) + 
+  geom_tile(color = "white") + 
+  scale_fill_gradient(low = "#E69F18", high = "#56B4E9") +
+  theme_minimal() + 
+  labs(title = "Confusion Matrix", x = "Prediction", y = "Reference") +
+  geom_text(aes(label = Freq), size = 12, fontface = "bold") + 
+  scale_x_discrete(expand = c(0, 0.1)) + 
+  scale_y_discrete(expand = c(0, 0.1))+
+  guides(fill = guide_colorbar(title = "Frequency"))
+cm_plot
+
+# Change the predicted classes and observed classes to numeric
+predicted.classes <- as.numeric(predicted.classes)
+observed.classes <- as.numeric(observed.classes)
+
+# Calculate the ROC curve using predicted probabilities
+roc_curve <- roc(predicted.classes, observed.classes)
+
+# Plot the ROC curve
+plot(roc_curve, col = "blue", main = "ROC Curve",xlim=c(0,1))
+lines(x = c(0, 1), y = c(0, 1), lty = 2)
+legend("bottomright", legend = paste0("AUC = ", round(auc(roc_curve), 2)), col = "blue", lty = 1, cex = 1.2)
+```
+
+
+
+***Ridge Regression***
+
+
+
+```{r}
+#Ridge Regression
+
+library(glmnet)
+library(mlbench)
+library(glmnet)
+library(dplyr)
+library(caret)
+
+#Splitting the dataset into train data and test data
+training.samples <- Lungcancerdata$LUNG_CANCER %>%createDataPartition(p = 0.75, list = FALSE)
+train.data <- Lungcancerdata[training.samples, ]
+test.data <- Lungcancerdata[-training.samples, ]
+
+# Splitting the dataset to input predictors and output variable
+x <- model.matrix(LUNG_CANCER~., train.data)[,-1]
+
+# Convert the outcome (class) to a numerical variable
+y <- ifelse(train.data$LUNG_CANCER == "YES", 1, 0)
+
+#Build Ridge Regression with cross validation
+set.seed(1234)
+cv.ridge <- cv.glmnet(x, y, alpha = 0, family = "binomial", lambda = NULL)
+plot(cv.ridge)
+
+#Fit the model with optimal lambda value
+cv.ridge$lambda.min
+model <- glmnet(x, y, alpha = 0, family = "binomial",lambda = cv.ridge$lambda.min)
+
+# Display regression coefficients
+coef(model)
+
+x.test <- model.matrix(LUNG_CANCER ~., test.data)[,-1]
+probabilities <- model %>% predict(newx = x.test)
+
+predicted.classes <- ifelse(probabilities > 0.5, "YES", "NO")
+observed.classes <- test.data$LUNG_CANCER
+mean(predicted.classes == observed.classes)
+
+```
+
+
+
+***Lasso Regression***
+
+
+
+```{r}
+# Lasso regression
+
+# Fit the Lasso Regression with cross validation
+set.seed(1234)
+cv.lasso <- cv.glmnet(x, y, alpha = 1, family = "binomial", lambda = NULL)
+plot(cv.lasso)
+
+# Optimal lambda value
+cv.lasso$lambda.min
+
+# Fit the final model on the training data using optimal lambda
+model <- glmnet(x, y, alpha = 1, family = "binomial",lambda = cv.lasso$lambda.min)
+
+# Display regression coefficients
+coef(model)
+
+# Make predictions on the test data
+x.test <- model.matrix(LUNG_CANCER ~., test.data)[,-1]
+probabilities <- model %>% predict(newx = x.test)
+
+# Model accuracy
+predicted.classes <- ifelse(probabilities > 0.5, "YES", "NO")
+observed.classes <- test.data$LUNG_CANCER
+mean(predicted.classes == observed.classes) # accuracy
+```
+
+
+
+***SVM***
+
+
+
+```{r}
+
+# Splitting the dataset 
+training.samples <- Lungcancerdata$LUNG_CANCER %>% createDataPartition(p = 0.75, list = FALSE)
+train.data <- Lungcancerdata[training.samples, ]
+test.data <- Lungcancerdata[-training.samples, ]
+x.train <- train.data[,-16]
+
+# Creating a train control object with 10-fold cross-validation
+train_control <- trainControl(method = "cv", number = 10)
+y.train <- ifelse(train.data$LUNG_CANCER == "YES", 1, 0)
+y.train <- factor(y.train, levels=c(0,1))
+
+# Defining the SVM model
+svm_model <- train(y.train ~ ., data = cbind(x.train, y.train), method = "svmLinear", trControl = train_control)
+
+# Printing the tuned model's performance
+print(svm_model)
+
+# Splitting the test data into input predictors and output
+x.test <- test.data[,-16]
+y.test <- ifelse(test.data$LUNG_CANCER == "YES", 1, 0)
+y.test<-factor(y.test,levels=c(0,1))
+
+# Make the predictions
+y_pred <- predict(svm_model, newdata = x.test)
+y_pred <- factor(y_pred, levels=c(0,1))
+y.test <- factor(y.test, levels=c(0,1))
+
+# Calculating the accuracy of the model
+# Construct the ConfusionMatrix 
+cm <-confusionMatrix(data = y_pred, reference = y.test)
+cm
+
+# Confusion Matrix Plot
+library(ggplot2)
+cm_plot <- ggplot(data = as.data.frame(cm$table), 
+                  aes(x = Prediction, y = Reference, fill = as.numeric(Freq))) + 
+  geom_tile(color = "white") + 
+  scale_fill_gradient(low = "#E69F18", high = "#56B4E9") +
+  theme_minimal() + 
+  labs(title = "Confusion Matrix", x = "Prediction", y = "Reference") +
+  geom_text(aes(label = Freq), size = 12, fontface = "bold") + 
+  scale_x_discrete(expand = c(0, 0.1)) + 
+  scale_y_discrete(expand = c(0, 0.1))+
+  guides(fill = guide_colorbar(title = "Frequency"))
+cm_plot
+
+predicted.classes <- as.numeric(y_pred)
+observed.classes <- as.numeric(y.test)
+
+# Calculate the ROC curve using predicted probabilities
+roc_curve <- roc(predicted.classes, observed.classes)
+
+# Plot the ROC curve
+plot(roc_curve, col = "blue", main = "ROC Curve",xlim=c(0,1))
+lines(x = c(0, 1), y = c(0, 1), lty = 2)
+legend("bottomright", legend = paste0("AUC = ", round(auc(roc_curve), 2)), col = "blue", lty = 1, cex = 1.2)
+
+```
+
+
+
+***Neural Network***
+
+
+
+```{r}
+
+library(neuralnet)
+library(caret)
+library(readr)
+library(kernlab)
+library(e1071)
+
+# Load the dataset
+lung_data <- read_csv("C:/Users/RENJITH/Downloads/lung_cancer.csv")
+
+# Split the dataset into training and testing sets
+set.seed(123)
+lung_data$LUNG_CANCER<-ifelse(lung_data$LUNG_CANCER =="YES",1,0)
+lung_data$GENDER<-ifelse(lung_data$GENDER=="F",1,0)
+
+maxs <- apply(lung_data, 2, max) 
+mins <- apply(lung_data, 2, min)
+scaled <- as.data.frame(scale(lung_data, center = mins, scale = maxs - mins))
+index <- sample(1:nrow(lung_data),round(0.75*nrow(lung_data)))
+
+# Train-test split
+train_ <- scaled[index,]
+test_ <- scaled[-index,]
+
+# Create the neural network model
+n <- names(train_)
+f <- as.formula(paste("LUNG_CANCER ~", paste(n[!n %in% "LUNG_CANCER"], collapse = " + ")))
+nn <- neuralnet(f,data=train_,hidden=c(10,10), act.fct = "logistic", linear.output=T)
+
+# Visual plot of the model
+plot(nn)
+
+#Make Predictions
+pr.nn <- compute(nn,test_[,1:15])
+
+# Descaling
+pr.nn_ <- pr.nn$net.result*(max(lung_data$LUNG_CANCER) - min(lung_data$LUNG_CANCER)) + min(lung_data$LUNG_CANCER)
+pr.nn_ <- ifelse(pr.nn_ >= 0.5, 1, 0)
+
+
+pr.nn_<-factor(pr.nn_,levels =c(0,1) )
+test_$LUNG_CANCER<-factor(test_$LUNG_CANCER,levels=c(0,1))
+
+# Confusion Matrix
+cm <- confusionMatrix(pr.nn_, test_$LUNG_CANCER)
+cm
+
+# Confusion Matrix Plot
+cm_plot <- ggplot(data = as.data.frame(cm$table), 
+                  aes(x = Prediction, y = Reference, fill = as.numeric(Freq))) + 
+  geom_tile(color = "white") + 
+  scale_fill_gradient(low = "#E69F18", high = "#56B4E9") +
+  theme_minimal() + 
+  labs(title = "Confusion Matrix", x = "Prediction", y = "Reference") +
+  geom_text(aes(label = Freq), size = 12, fontface = "bold") + 
+  scale_x_discrete(expand = c(0, 0.1)) + 
+  scale_y_discrete(expand = c(0, 0.1))+
+  guides(fill = guide_colorbar(title = "Frequency"))
+cm_plot
+
+# Print Accuracy
+print(cm$overall[1])
+```
